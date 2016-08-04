@@ -18,41 +18,41 @@
 
 package org.sample.jms;
 
-import com.google.common.base.Stopwatch;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.log4j.PropertyConfigurator;
+
 import javax.jms.*;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import java.util.Properties;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class SampleQueueReceiver {
 
-    private static final Log log = LogFactory.getLog(SampleQueueReceiver.class);
-
-
     public static final String QPID_ICF = "org.wso2.andes.jndi.PropertiesFileInitialContextFactory";
+    private static final Log log = LogFactory.getLog(SampleQueueReceiver.class);
     private static final String CF_NAME_PREFIX = "connectionfactory.";
     private static final String CF_NAME = "qpidConnectionfactory";
-    String userName = "admin";
-    String password = "admin";
     private static String CARBON_CLIENT_ID = "carbon";
     private static String CARBON_VIRTUAL_HOST_NAME = "carbon";
     private static String CARBON_DEFAULT_HOSTNAME = "10.100.4.165";
     private static String CARBON_DEFAULT_PORT = "5672";
+    String userName = "admin";
+    String password = "admin";
     String queueName = "testQueue";
+    long messageCount = 0;
     private QueueConnection queueConnection;
     private QueueSession queueSession;
 
-
-    public MessageConsumer registerSubscriber() throws NamingException, JMSException{
+    public MessageConsumer registerSubscriber() throws NamingException, JMSException {
         Properties properties = new Properties();
         properties.put(Context.INITIAL_CONTEXT_FACTORY, QPID_ICF);
         properties.put(CF_NAME_PREFIX + CF_NAME, getTCPConnectionURL(userName, password));
-        properties.put("queue."+ queueName,queueName);
+        properties.put("queue." + queueName, queueName);
         InitialContext ctx = new InitialContext(properties);
         // Lookup connection factory
         QueueConnectionFactory connFactory = (QueueConnectionFactory) ctx.lookup(CF_NAME);
@@ -60,10 +60,8 @@ public class SampleQueueReceiver {
         queueConnection.start();
         queueSession =
                 queueConnection.createQueueSession(false, QueueSession.AUTO_ACKNOWLEDGE);
-        //Receive message
-                Queue queue = (Queue) ctx.lookup(queueName);
-                MessageConsumer consumer = queueSession.createConsumer(queue);
-
+        Queue queue = (Queue) ctx.lookup(queueName);
+        MessageConsumer consumer = queueSession.createConsumer(queue);
         return consumer;
 
     }
@@ -73,38 +71,19 @@ public class SampleQueueReceiver {
 
         PropertyConfigurator.configure("log4j.properties");
 
+        //Receive all the message
+        while (consumer.receive() != null)
+        {
+            messageCount++;
 
-        //TextMessage message;
-        int messageCount=0;
-        int messageCount1=0;
-        int messageCount2;
-        int seconds=1;
-        Stopwatch stopwatch = new Stopwatch();
-        stopwatch.start();
+        }
 
-        while (consumer.receive()!=null) {
-            //message = (TextMessage) consumer.receive();
-            // System.out.println("Got message from queue receiver==>" + message.getText());
-            if (stopwatch.elapsedTime(TimeUnit.SECONDS) == seconds) {
-
-                messageCount2 = messageCount -messageCount1;
-               // System.out.println("**********************" + messageCount2);
-                log.error(messageCount2);
-                seconds++;
-                messageCount1=messageCount;
-
-            }
-
-        messageCount++;
-
-}
-
-        // Housekeeping
         consumer.close();
         queueSession.close();
         queueConnection.stop();
         queueConnection.close();
     }
+
     private String getTCPConnectionURL(String username, String password) {
         // amqp://{username}:{password}@carbon/carbon?brokerlist='tcp://{hostname}:{port}'
         return new StringBuffer()
@@ -114,5 +93,23 @@ public class SampleQueueReceiver {
                 .append("?brokerlist='tcp://").append(CARBON_DEFAULT_HOSTNAME).append(":").append(CARBON_DEFAULT_PORT).append("'")
                 .toString();
     }
- 
+
+    /*
+    *This method contais runnable thread which is used to calculate message per second.
+     */
+    public void calculate() {
+
+        Runnable helloRunnable = new Runnable() {
+            public void run() {
+                System.out.println(messageCount);
+                messageCount = 0;
+            }
+        };
+
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(0);
+        executor.scheduleAtFixedRate(helloRunnable, 1, 1, TimeUnit.SECONDS);
+
+
+    }
+
 }

@@ -20,7 +20,6 @@
 package org.sample.jms;
 
 import javax.jms.JMSException;
-import javax.jms.MessageConsumer;
 import javax.naming.NamingException;
 
 
@@ -29,13 +28,17 @@ public class Main {
 	public static void main(String[] args) throws NamingException, JMSException {
 
 
-        SampleQueueReceiver queueReceiver = new SampleQueueReceiver();
+       /* SampleQueueReceiver queueReceiver = new SampleQueueReceiver();
+        queueReceiver.calculate();
         MessageConsumer consumer = queueReceiver.registerSubscriber();
-        queueReceiver.receiveMessages(consumer);
+        queueReceiver.receiveMessages(consumer);*/
 
-       /* SampleQueueSender queueSender = new SampleQueueSender();
+        SampleQueueSender queueSender = new SampleQueueSender();
+        queueSender.calculate();
         queueSender.sendMessages();
-*/
+
+
+
     }
 }
 

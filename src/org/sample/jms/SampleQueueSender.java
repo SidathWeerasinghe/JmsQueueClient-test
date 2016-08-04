@@ -18,7 +18,6 @@
 
 package org.sample.jms;
 
-import com.google.common.base.Stopwatch;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.log4j.PropertyConfigurator;
@@ -28,6 +27,8 @@ import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import java.util.Properties;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class SampleQueueSender {
@@ -36,28 +37,22 @@ public class SampleQueueSender {
     private static final String CF_NAME_PREFIX = "connectionfactory.";
     private static final String QUEUE_NAME_PREFIX = "queue.";
     private static final String CF_NAME = "qpidConnectionfactory";
-    String userName = "admin";
-    String password = "admin";
+    private static final long RECORD_COUNT = 2000;
+    private static final Log log = LogFactory.getLog(SampleQueueSender.class);
     private static String CARBON_CLIENT_ID = "carbon";
     private static String CARBON_VIRTUAL_HOST_NAME = "carbon";
     private static String CARBON_DEFAULT_HOSTNAME = "10.100.4.165";
     private static String CARBON_DEFAULT_PORT = "5672";
+    String userName = "admin";
+    String password = "admin";
     String queueName = "testQueue";
+    long messageCount = 0;
     private QueueConnection queueConnection;
     private QueueSession queueSession;
-
-
-    private static final int RECORD_COUNT = 10000;
-
-    private static final Log log = LogFactory.getLog(SampleQueueSender.class);
-
-
 
     public void sendMessages() throws NamingException, JMSException {
 
         PropertyConfigurator.configure("log4j.properties");
-
-
         Properties properties = new Properties();
         properties.put(Context.INITIAL_CONTEXT_FACTORY, QPID_ICF);
         properties.put(CF_NAME_PREFIX + CF_NAME, getTCPConnectionURL(userName, password));
@@ -68,76 +63,22 @@ public class SampleQueueSender {
         queueConnection = connFactory.createQueueConnection();
         queueConnection.start();
         queueSession = queueConnection.createQueueSession(false, QueueSession.AUTO_ACKNOWLEDGE);
-        // Send message
-        Queue queue = (Queue)ctx.lookup(queueName);
-
-
-        // create the message to send
-        QueueSender queueSender;
-
-       /* for (int j = 0; j<=10; j++) {
-            TextMessage textMessage = queueSession.createTextMessage("Test Message Content");
-            queueSender = queueSession.createSender(queue);
-            queueSender.send(textMessage);
-
-        }*/
-
-
-       /* List<String> records = new ArrayList<String>(RECORD_COUNT);
-        int size = 0;
-        for (int i = 0; i < RECORD_COUNT; i++) {
-            records.add(i +" --> " + RECORD);
-            size += RECSIZE;
-        }
-        log.info(records.size() + " records");;*/
-
+        Queue queue = (Queue) ctx.lookup(queueName);
+        QueueSender queueSender = queueSession.createSender(queue);
         TextMessage textMessage;
-        long start = System.currentTimeMillis();
-        int messageCount=0;
-        int messageCount1=0;
-        int messageCount2=0;
-        int i=1;
 
-        Stopwatch stopwatch = new Stopwatch();
-        stopwatch.start();
-
-        //for (String record : records) {
-
-        for (int w = 0; w < RECORD_COUNT; w++){
-
-             textMessage = queueSession.createTextMessage("Test Message Content"+ w);
-            queueSender = queueSession.createSender(queue);
+        for (long i = 0; i < RECORD_COUNT; i++) {
+            // create the message to send
+            textMessage = queueSession.createTextMessage("Test Message Content" + messageCount);
+            // Send message
             queueSender.send(textMessage);
-            //queueSender.close();
-
-            /*if ((System.currentTimeMillis() - start) >= 1000) {
-
-                messageCount = records.indexOf(record)-messageCount;
-                System.out.println("**************************Number of messages******************** "
-                        + messageCount +start);
-                start=System.currentTimeMillis();
-            }*/
-            if(stopwatch.elapsedTime(TimeUnit.SECONDS)==i){
-                messageCount2 = messageCount -messageCount1;
-               // System.out.println(messageCount2);
-                log.error(messageCount2);
-                i++;
-                messageCount1=messageCount;
-
-            }
             messageCount++;
-
         }
-
-      //  long end = System.currentTimeMillis();
-      //  System.out.println((end - start) / 1000f + " seconds");
-
-
-       // queueSender.close();
-
+        queueSender.close();
         queueSession.close();
         queueConnection.close();
     }
+
     private String getTCPConnectionURL(String username, String password) {
         // amqp://{username}:{password}@carbon/carbon?brokerlist='tcp://{hostname}:{port}'
         return new StringBuffer()
@@ -147,5 +88,22 @@ public class SampleQueueSender {
                 .append("?brokerlist='tcp://").append(CARBON_DEFAULT_HOSTNAME).append(":").append(CARBON_DEFAULT_PORT).append("'")
                 .toString();
     }
- 
+
+/*
+*This method contais runnable thread which is used to calculate message per second.
+ */
+    public void calculate() {
+
+        Runnable messagePerSecond = new Runnable()
+        {
+            public void run()
+            {
+                log.error("Messages per second " + messageCount);
+                messageCount = 0;
+            }
+        };
+
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(0);
+        executor.scheduleAtFixedRate(messagePerSecond, 1, 1, TimeUnit.SECONDS);
+    }
 }
